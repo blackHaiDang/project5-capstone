@@ -27,3 +27,12 @@ Handling connection for 8080
 [2023-09-16 07:18:37,159] INFO in app: output prediction:
 [20.35373177134412]
 172.17.0.1 - - [16/Sep/2023 07:18:37] "POST /predict HTTP/1.1" 200 -
+
+#The result below is the output after I ran make_prediction.sh
+
+Port: 8080
+{
+  "prediction": [    
+    20.35373177134412
+  ]
+}

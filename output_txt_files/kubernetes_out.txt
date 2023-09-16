@@ -1,1 +1,7 @@
-<paste log output from Kubernetes-mediated prediction, here>
+#The below is logs after I ran run_kubernetes.sh and run make_prediction.sh
+Admin@HaiDang MINGW64 ~/Desktop/Udacity/Cloud DevOps Engineer/project4/project-ml-microservice-kubernetes (main)
+$ bash run_kubernetes.sh 
+NAME     READY   STATUS    RESTARTS      AGE
+ml-api   1/1     Running   2 (90s ago)   10h
+Forwarding from 127.0.0.1:8080 -> 80
+Handling connection for 8080

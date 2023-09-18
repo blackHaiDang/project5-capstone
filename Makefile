@@ -7,7 +7,7 @@
 
 setup:
 	# Create python virtualenv & source it
-	source ~/.devops/Scripts/activate
+	source ~/.devops/bin/activate
 	py -m venv ~/.devops
 
 install:

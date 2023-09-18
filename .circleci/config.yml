@@ -107,7 +107,9 @@ jobs:
       - run:
           name: Deployment configmap to eks 
           command: |
-            kubectl apply -f ~/kubernetes/aws-auth-cm.yaml
+            pwd
+            ls -a
+            # kubectl apply -f ~/kubernetes/aws-auth-cm.yaml
       - run:
           name: Deploytment app to eks 
           command: |

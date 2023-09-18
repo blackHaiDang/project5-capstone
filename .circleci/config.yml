@@ -66,11 +66,11 @@ jobs:
       - run:
           name: Tag docker to Push image to github
           command: |
-            docker tag capstone blackHaiDang/capstone
+            docker tag capstone theblackdang/capstone
       - run:
           name: Push Docker Image
           command: |
-            docker push blackHaiDang/capstone   
+            docker push theblackdang/capstone   
   deploy:
     docker:
       - image: circleci/python:3.7.3-stretch

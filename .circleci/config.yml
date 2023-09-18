@@ -107,11 +107,11 @@ jobs:
       - run:
           name: Deployment configmap to eks 
           command: |
-            kubectl apply -f ~\kubernetes\aws-auth-cm.yaml
+            kubectl apply -f ~/kubernetes/aws-auth-cm.yaml
       - run:
           name: Deploytment app to eks 
           command: |
-            kubectl apply -f ~\kubernetes\deployment.yaml
+            kubectl apply -f ~/kubernetes/deployment.yaml
       - run:
           name: Run test SVC
           command: |

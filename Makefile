@@ -7,7 +7,8 @@
 
 setup:
 	# Create python virtualenv & source it
-	source ~/.devops/bin/activate
+	# source ~/.devops/bin/activate
+	pip install virtualenv
 	py -m venv ~/.devops
 
 install:

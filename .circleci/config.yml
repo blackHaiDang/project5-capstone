@@ -127,16 +127,16 @@ workflows:
           filters:
             branches:
               only: 
-                - master
+                - main
       - build:
           requires: [lint]
           filters:
             branches:
               only: 
-                - master
+                - main
       - deploy:
           requires: [build]
           filters:
             branches:
               only:
-                - master
+                - main

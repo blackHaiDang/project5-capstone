@@ -41,9 +41,7 @@ jobs:
             make lint
   build:
     docker:
-    # Use the same Docker base as the project
-      - image: python:3.7.3-stretch
-
+      - image: circleci/python:3.7.3-stretch
     working_directory: ~/repo
 
     steps:
@@ -64,15 +62,15 @@ jobs:
             docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
       - run:
           name: Build image from Dockerfile
-          command: docker build --tag=final .
+          command: docker build --tag=capstone .
       - run:
           name: Tag docker to Push image to github
           command: |
-            docker tag final blackHaiDang/final
+            docker tag capstone blackHaiDang/capstone
       - run:
           name: Push Docker Image
           command: |
-            docker push blackHaiDang/final   
+            docker push blackHaiDang/capstone   
   deploy:
     docker:
       - image: circleci/python:3.7.3-stretch

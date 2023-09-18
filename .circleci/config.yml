@@ -112,7 +112,7 @@ jobs:
             cd kubernetes
             pwd
             ls -a
-            kubectl apply -f aws-auth-cm.yaml
+            kubectl apply -f aws-auth.yaml
       - run:
           name: Deploytment app to eks 
           command: |

@@ -1,9 +1,44 @@
-# Python CircleCI 2.0 configuration file
-#
-# Check https://circleci.com/docs/2.0/language-python/ for more details
-#
 version: 2
 jobs:
+  lint:
+    docker:
+      - image: circleci/python:3.7.3-stretch
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+          - v1-dependencies-{{ checksum "requirements.txt" }}
+          - v1-dependencies-
+      - run:
+          name: create virtualenv
+          command: |
+            make setup
+      - run:
+          name: install dependencies
+          command: |
+            python3 -m venv ~/.devops
+            source ~/.devops/bin/activate
+            pip install -r requirements.txt
+      - save_cache:
+          paths:
+            - ./venv
+          key: v1-dependencies-{{ checksum "requirements.txt" }}
+      - run:
+          name: run install
+          command: |
+            source ~/.devops/bin/activate
+            make install
+      - run:
+          name: run tests
+          command: |
+            source ~/.devops/bin/activate
+            make test
+      - run:
+          name: run lint
+          command: |
+            source ~/.devops/bin/activate
+            make lint
   build:
     docker:
     # Use the same Docker base as the project
@@ -13,32 +48,95 @@ jobs:
 
     steps:
       - checkout
-
-      # Download and cache dependencies
-      - restore_cache:
-          keys:
-            - v1-dependencies-{{ checksum "requirements.txt" }}
-            # fallback to using the latest cache if no exact match is found
-            - v1-dependencies-
-
+      - setup_remote_docker:
+          version: 20.10.14
+          docker_layer_caching: true
       - run:
-          name: install dependencies
+          name: Install dependencies
           command: |
-            python3 -m venv venv
-            . venv/bin/activate
-            make install
-            # Install hadolint
-            wget -O /bin/hadolint https://github.com/hadolint/hadolint/releases/download/v1.16.3/hadolint-Linux-x86_64 &&\
-                chmod +x /bin/hadolint
-
-      - save_cache:
-          paths:
-            - ./venv
-          key: v1-dependencies-{{ checksum "requirements.txt" }}
-
-      # run lint!
+            sudo apt install -y tar gzip curl
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install
       - run:
-          name: run lint
+          name: Docker login
           command: |
-            . venv/bin/activate
-            make lint           
+            docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+      - run:
+          name: Build image from Dockerfile
+          command: docker build --tag=final .
+      - run:
+          name: Tag docker to Push image to github
+          command: |
+            docker tag final blackHaiDang/final
+      - run:
+          name: Push Docker Image
+          command: |
+            docker push blackHaiDang/final   
+  deploy:
+    docker:
+      - image: circleci/python:3.7.3-stretch
+    working_directory: ~/repo
+    steps:
+      - checkout
+      - setup_remote_docker:
+          version: 20.10.14
+          docker_layer_caching: true
+      - run:
+          name: Install dependencies
+          command: |
+            sudo apt install -y tar gzip curl
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install
+      - run:
+          name: Install kubectl 
+          command: |
+            curl -k -LO "https://dl.k8s.io/release/v1.24.7/bin/linux/amd64/kubectl"
+            curl -k -LO "https://dl.k8s.io/v1.24.7/bin/linux/amd64/kubectl.sha256"
+            echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
+            sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+#            chmod +x /usr/local/bin/kubectl
+      - run:
+          name: Configure AWS CLI
+          command: |
+            aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+            aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+            aws configure set default.region us-east-1 
+            aws eks update-kubeconfig --name Capstone-project-EKS
+            kubectl cluster-info
+            kubectl get all -n kube-system
+      - run:
+          name: Deployment configmap to eks 
+          command: |
+            kubectl apply -f ./kubernetes/aws-auth-cm.yaml
+      - run:
+          name: Deploytment app to eks 
+          command: |
+            kubectl apply -f ./kubernetes/deploytment.yaml
+      - run:
+          name: Run test SVC
+          command: |
+            sleep 360
+            kubectl get all
+workflows:
+  version: 2
+  default:
+    jobs:
+      - lint:
+          filters:
+            branches:
+              only: 
+                - master
+      - build:
+          requires: [lint]
+          filters:
+            branches:
+              only: 
+                - master
+      - deploy:
+          requires: [build]
+          filters:
+            branches:
+              only:
+                - master

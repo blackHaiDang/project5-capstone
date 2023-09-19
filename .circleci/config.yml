@@ -120,7 +120,7 @@ jobs:
               --template-file cloudformation/network.yml \
               --tags project=${ENVIRONMENT_NAME}-project \
               --stack-name "${ENVIRONMENT_NAME}-eks-network" \
-              --region ${AWS_DEFAULT_REGION} \
+              --region us-east-1 \
               --parameter-overrides file://cloudformation/network-parameters.json
       - run:
           name: Ensure EKS Cluster exists
@@ -129,7 +129,7 @@ jobs:
               --template-file cloudformation/cluster.yml \
               --tags project=${ENVIRONMENT_NAME}-project \
               --stack-name "${ENVIRONMENT_NAME}-eks-cluster" \
-              --region ${AWS_DEFAULT_REGION} \
+              --region us-east-1 \
               --parameter-overrides file://cloudformation/cluster-parameters.json \
               --capabilities CAPABILITY_NAMED_IAM
           no_output_timeout: 15m
@@ -140,7 +140,7 @@ jobs:
               --template-file cloudformation/nodegroup.yml \
               --tags project=${ENVIRONMENT_NAME}-project \
               --stack-name "${ENVIRONMENT_NAME}-eks-nodegroup" \
-              --region ${AWS_DEFAULT_REGION} \
+              --region us-east-1 \
               --parameter-overrides file://cloudformation/nodegroup-parameters.json \
               --capabilities CAPABILITY_NAMED_IAM
       - run:
@@ -150,7 +150,7 @@ jobs:
               --template-file cloudformation/management.yml \
               --tags project=${ENVIRONMENT_NAME}-project \
               --stack-name "${ENVIRONMENT_NAME}-eks-management" \
-              --region ${AWS_DEFAULT_REGION} \
+              --region us-east-1 \
               --parameter-overrides file://cloudformation/management-parameters.json \
               --output text >> ~/project/ansible/checkIfDeployed.txt
             cat ~/project/ansible/checkIfDeployed.txt
@@ -159,7 +159,7 @@ jobs:
           command: |
             echo [management] > ~/project/ansible/inventory.txt
             aws ec2 describe-instances \
-              --region "${AWS_DEFAULT_REGION}" \
+              --region us-east-1 \
               --query 'Reservations[*].Instances[*].PublicIpAddress' \
               --filters "Name=tag:Name,Values=${ENVIRONMENT_NAME}-management*" \
               --output text >> ~/project/ansible/inventory.txt
@@ -186,7 +186,7 @@ jobs:
           command: |
             echo [management] > ~/project/ansible/inventory.txt
             aws ec2 describe-instances \
-              --region "${AWS_DEFAULT_REGION}" \
+              --region us-east-1 \
               --query 'Reservations[*].Instances[*].PublicIpAddress' \
               --filters "Name=tag:Name,Values=${ENVIRONMENT_NAME}-management*" \
               --output text >> ~/project/ansible/inventory.txt

@@ -169,6 +169,11 @@ jobs:
           paths:
             - project/ansible/inventory.txt
             - project/ansible/checkIfDeployed.txts
+      - run:
+          name: Destroy environments
+          when: on_fail
+          command: |
+              python3 ~/project/clean-stacks.py
   configure-infras:
     docker:
       - image: cimg/base:stable
@@ -209,6 +214,11 @@ jobs:
               --output text >> ~/project/ansible/inventory.txt
             cat ~/project/ansible/inventory.txt
             ansible-playbook -i ~/project/ansible/inventory.txt ~/project/ansible/configure-server.yml
+      - run:
+          name: Destroy environments
+          when: on_fail
+          command: |
+              python3 ~/project/clean-stacks.py
 
   configure-cluster:
     docker:
@@ -262,6 +272,11 @@ jobs:
           root: ~/
           paths:
             - project/ansible/elb_dns.txt
+      - run:
+          name: Destroy environments
+          when: on_fail
+          command: |
+              python3 ~/project/clean-stacks.py
 
   deploy-docker:
     docker:

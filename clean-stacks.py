@@ -1,4 +1,4 @@
-﻿import boto3
+import boto3
     
 cf_client = boto3.client('cloudformation', region_name="us-east-1")
     

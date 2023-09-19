@@ -39,7 +39,7 @@ jobs:
           command: |
             source ~/.devops/bin/activate
             make lint
-  build:
+  upload-docker:
     docker:
       - image: circleci/python:3.7.3-stretch
     working_directory: ~/repo
@@ -71,58 +71,148 @@ jobs:
           name: Push Docker Image
           command: |
             docker push theblackdang/capstone   
-  deploy:
+  deploy-infras:
     docker:
-      - image: circleci/python:3.7.3-stretch
-    working_directory: ~/repo
+      - image: amazon/aws-cli
     steps:
       - checkout
-      - setup_remote_docker:
-          version: 20.10.14
-          docker_layer_caching: true
       - run:
           name: Install dependencies
-          command: |
-            sudo apt install -y tar gzip curl
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip awscliv2.zip
-            sudo ./aws/install
+          command: yum install -y tar gzip
       - run:
-          name: Install kubectl 
+          name: Ensure EKS network exists
           command: |
-            curl -k -LO "https://dl.k8s.io/release/v1.24.7/bin/linux/amd64/kubectl"
-            curl -k -LO "https://dl.k8s.io/v1.24.7/bin/linux/amd64/kubectl.sha256"
-            echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
-            sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-#            chmod +x /usr/local/bin/kubectl
+            aws cloudformation deploy \
+              --template-file cloudformation/network.yml \
+              --tags project=${ENVIRONMENT_NAME}-project \
+              --stack-name "${ENVIRONMENT_NAME}-eks-network" \
+              --region ${AWS_DEFAULT_REGION} \
+              --parameter-overrides file://cloudformation/network-parameters.json
       - run:
-          name: Configure AWS CLI
+          name: Ensure EKS Cluster exists
           command: |
-            aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
-            aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-            aws configure set default.region us-east-1 
-            aws eks update-kubeconfig --name capstone-cluster
-            kubectl cluster-info
-            kubectl get all -n kube-system
+            aws cloudformation deploy \
+              --template-file cloudformation/cluster.yml \
+              --tags project=${ENVIRONMENT_NAME}-project \
+              --stack-name "${ENVIRONMENT_NAME}-eks-cluster" \
+              --region ${AWS_DEFAULT_REGION} \
+              --parameter-overrides file://cloudformation/cluster-parameters.json \
+              --capabilities CAPABILITY_NAMED_IAM
+          no_output_timeout: 15m
       - run:
-          name: Deployment configmap to eks 
+          name: Ensure Nodegroup exists
           command: |
-            pwd
-            ls -a
-            cd kubernetes
-            pwd
-            ls -a
-            kubectl apply -f aws-auth.yaml
+            aws cloudformation deploy \
+              --template-file cloudformation/nodegroup.yml \
+              --tags project=${ENVIRONMENT_NAME}-project \
+              --stack-name "${ENVIRONMENT_NAME}-eks-nodegroup" \
+              --region ${AWS_DEFAULT_REGION} \
+              --parameter-overrides file://cloudformation/nodegroup-parameters.json \
+              --capabilities CAPABILITY_NAMED_IAM
       - run:
-          name: Deploytment app to eks 
+          name: Ensure management instances exists
           command: |
-            cd kubernetes
-            kubectl apply -f deployment.yaml
+            aws cloudformation deploy \
+              --template-file cloudformation/management.yml \
+              --tags project=${ENVIRONMENT_NAME}-project \
+              --stack-name "${ENVIRONMENT_NAME}-eks-management" \
+              --region ${AWS_DEFAULT_REGION} \
+              --parameter-overrides file://cloudformation/management-parameters.json \
+              --output text >> ~/project/ansible/checkIfDeployed.txt
+            cat ~/project/ansible/checkIfDeployed.txt
       - run:
-          name: Run test SVC
+          name: Extract the IPs of the management instances for Ansible
           command: |
-            sleep 360
-            kubectl get all
+            echo [management] > ~/project/ansible/inventory.txt
+            aws ec2 describe-instances \
+              --region "${AWS_DEFAULT_REGION}" \
+              --query 'Reservations[*].Instances[*].PublicIpAddress' \
+              --filters "Name=tag:Name,Values=${ENVIRONMENT_NAME}-management*" \
+              --output text >> ~/project/ansible/inventory.txt
+            cat ~/project/ansible/inventory.txt
+      - persist_to_workspace:
+          root: ~/
+          paths:
+            - project/ansible/inventory.txt
+            - project/ansible/checkIfDeployed.txts
+  configure-infrastructure:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - install_awscli
+      - install_ansible
+      - install-kubectl
+      - add_ssh_keys:
+          fingerprints: [dc:31:72:ac:30:aa:d2:cb:d3:27:1f:a1:f2:1d:4d:54]
+      - attach_workspace:
+          at: ~/
+      - run:
+          name: Configure server
+          command: |
+            echo [management] > ~/project/ansible/inventory.txt
+            aws ec2 describe-instances \
+              --region "${AWS_DEFAULT_REGION}" \
+              --query 'Reservations[*].Instances[*].PublicIpAddress' \
+              --filters "Name=tag:Name,Values=${ENVIRONMENT_NAME}-management*" \
+              --output text >> ~/project/ansible/inventory.txt
+            cat ~/project/ansible/inventory.txt
+            ansible-playbook -i ~/project/ansible/inventory.txt ~/project/ansible/configure-server.yml
+
+  configure-cluster:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - install_awscli
+      - install_ansible
+      - install-kubectl
+      - add_ssh_keys:
+          fingerprints: [dc:31:72:ac:30:aa:d2:cb:d3:27:1f:a1:f2:1d:4d:54]
+      - attach_workspace:
+          at: ~/
+      - run:
+          name: Configure server
+          command: |        
+            cat ~/project/ansible/inventory.txt
+            cd ansible
+            ansible-playbook -i ~/project/ansible/inventory.txt ~/project/ansible/configure-cluster.yml
+      - run:
+          name: Wait for LoadBalancer's domain to become reachable
+          command: |
+            cat ~/project/ansible/inventory.txt
+            echo "Wait 60 seconds..."
+            sleep 60
+      - run:
+          name: Display the LoadBalancer's DNS name
+          command: |
+            cat ~/project/ansible/inventory.txt
+            cd ansible
+            ansible-playbook -i ~/project/ansible/inventory.txt ~/project/ansible/save-elb-dns.yml
+            cat ~/project/ansible/elb_dns.txt
+      - persist_to_workspace:
+          root: ~/
+          paths:
+            - project/ansible/elb_dns.txt
+
+  deploy-docker:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - install_awscli
+      - install_ansible
+      - add_ssh_keys:
+          fingerprints: [dc:31:72:ac:30:aa:d2:cb:d3:27:1f:a1:f2:1d:4d:54]
+      - attach_workspace:
+          at: ~/
+      - run:
+          name: Deploy newest Docker Image
+          command: |
+            cat ~/project/ansible/inventory.txt
+            cd ansible
+            ansible-playbook -i ~/project/ansible/inventory.txt ~/project/ansible/deploy-app.yml
+          no_output_timeout: 2m
 workflows:
   version: 2
   default:
@@ -132,15 +222,25 @@ workflows:
             branches:
               only: 
                 - main
-      - build:
+      - upload-docker:
           requires: [lint]
           filters:
             branches:
               only: 
                 - main
-      - deploy:
-          requires: [build]
+      - deploy-infras:
+          requires: [upload-docker]
           filters:
             branches:
               only:
                 - main
+      - configure-infrastructure:
+          requires:
+            - deploy-infrastructure
+      - configure-cluster:
+          requires:
+            - configure-infrastructure
+            - upload-docker
+      - deploy-docker:
+          requires:
+            - configure-cluster

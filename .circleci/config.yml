@@ -119,7 +119,7 @@ jobs:
             aws cloudformation deploy \
               --template-file cloudformation/network.yml \
               --tags project=capstone-project \
-              --stack-name "capstone-eks-network" \
+              --stack-name "capstone-eks-network-${CIRCLE_WORKFLOW_ID:0:7}" \
               --region us-east-1 \
               --parameter-overrides file://cloudformation/network-parameters.json
       - run:
@@ -128,7 +128,7 @@ jobs:
             aws cloudformation deploy \
               --template-file cloudformation/cluster.yml \
               --tags project=capstone-project \
-              --stack-name "capstone-eks-cluster" \
+              --stack-name "capstone-eks-cluster-${CIRCLE_WORKFLOW_ID:0:7}" \
               --region us-east-1 \
               --parameter-overrides file://cloudformation/cluster-parameters.json \
               --capabilities CAPABILITY_NAMED_IAM
@@ -139,7 +139,7 @@ jobs:
             aws cloudformation deploy \
               --template-file cloudformation/nodegroup.yml \
               --tags project=capstone-project \
-              --stack-name "capstone-eks-nodegroup" \
+              --stack-name "capstone-eks-nodegroup-${CIRCLE_WORKFLOW_ID:0:7}" \
               --region us-east-1 \
               --parameter-overrides file://cloudformation/nodegroup-parameters.json \
               --capabilities CAPABILITY_NAMED_IAM
@@ -149,7 +149,7 @@ jobs:
             aws cloudformation deploy \
               --template-file cloudformation/management.yml \
               --tags project=capstone-project \
-              --stack-name "capstone-eks-management" \
+              --stack-name "capstone-eks-management-${CIRCLE_WORKFLOW_ID:0:7}" \
               --region us-east-1 \
               --parameter-overrides file://cloudformation/management-parameters.json \
               --output text >> ~/project/ansible/checkIfDeployed.txt

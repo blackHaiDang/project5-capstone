@@ -1,38 +1,4 @@
 version: 2
-
-commands:
-  install_awscli:
-    description: Install AWS CLI v2
-    steps:
-      - run:
-          name: Install AWS CLI v2
-          command: |
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip awscliv2.zip
-            sudo ./aws/install
-
-  install_ansible:
-    description: Install Ansible
-    steps:
-      - run:
-          name: Install Ansible
-          command: |
-            sudo apt update
-            sudo apt install software-properties-common -y
-            sudo add-apt-repository --yes --update ppa:ansible/ansible
-            sudo apt install ansible -y
-
-  install-kubectl:
-    description: Install Kubectl
-    steps:
-      - run:
-          name: Install Kubectl
-          command: |
-            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-            sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-            kubectl version --client
-            export PATH=$PATH:/usr/local/bin/kubectl
-
 jobs:
   lint:
     docker:
@@ -73,7 +39,7 @@ jobs:
           command: |
             source ~/.devops/bin/activate
             make lint
-  upload-docker:
+  build:
     docker:
       - image: circleci/python:3.7.3-stretch
     working_directory: ~/repo
@@ -105,208 +71,58 @@ jobs:
           name: Push Docker Image
           command: |
             docker push theblackdang/capstone   
-  deploy-infras:
+  deploy:
     docker:
-      - image: amazon/aws-cli
+      - image: circleci/python:3.7.3-stretch
+    working_directory: ~/repo
     steps:
       - checkout
+      - setup_remote_docker:
+          version: 20.10.14
+          docker_layer_caching: true
       - run:
           name: Install dependencies
-          command: yum install -y tar gzip
-      - run:
-          name: Ensure EKS network exists
           command: |
-            aws cloudformation deploy \
-              --template-file cloudformation/network.yml \
-              --tags project=capstone-project \
-              --stack-name "capstone-eks-network-19-9-2023" \
-              --region us-east-1 \
-              --parameter-overrides file://cloudformation/network-parameters.json
-      - run:
-          name: Ensure EKS Cluster exists
-          command: |
-            aws cloudformation deploy \
-              --template-file cloudformation/cluster.yml \
-              --tags project=capstone-project \
-              --stack-name "capstone-eks-cluster-19-9-2023" \
-              --region us-east-1 \
-              --parameter-overrides file://cloudformation/cluster-parameters.json \
-              --capabilities CAPABILITY_NAMED_IAM
-          no_output_timeout: 15m
-      - run:
-          name: Ensure Nodegroup exists
-          command: |
-            aws cloudformation deploy \
-              --template-file cloudformation/nodegroup.yml \
-              --tags project=capstone-project \
-              --stack-name "capstone-eks-nodegroup-19-9-2023" \
-              --region us-east-1 \
-              --parameter-overrides file://cloudformation/nodegroup-parameters.json \
-              --capabilities CAPABILITY_NAMED_IAM
-      - run:
-          name: Ensure management instances exists
-          command: |
-            aws cloudformation deploy \
-              --template-file cloudformation/management.yml \
-              --tags project=capstone-project \
-              --stack-name "capstone-eks-management-19-9-2023" \
-              --region us-east-1 \
-              --parameter-overrides file://cloudformation/management-parameters.json \
-              --output text >> ~/project/ansible/checkIfDeployed.txt
-            cat ~/project/ansible/checkIfDeployed.txt
-      - run:
-          name: Extract the IPs of the management instances for Ansible
-          command: |
-            echo [management] > ~/project/ansible/inventory.txt
-            aws ec2 describe-instances \
-              --region us-east-1 \
-              --query 'Reservations[*].Instances[*].PublicIpAddress' \
-              --filters "Name=tag:Name,Values=capstone-management*" \
-              --output text >> ~/project/ansible/inventory.txt
-            cat ~/project/ansible/inventory.txt
-      - persist_to_workspace:
-          root: ~/
-          paths:
-            - project/ansible/inventory.txt
-            - project/ansible/checkIfDeployed.txts
-      # - run:
-      #     name: Destroy environments
-      #     when: on_fail
-      #     command: |
-      #         python3 ~/project/clean-stacks.py
-  configure-infras:
-    docker:
-      - image: cimg/base:stable
-    steps:
-      - checkout
-      - run:
-          name: Install AWS CLI v2
-          command: |
+            sudo apt install -y tar gzip curl
             curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
             unzip awscliv2.zip
             sudo ./aws/install
       - run:
-          name: Install Ansible
+          name: Install kubectl 
           command: |
-            sudo apt update
-            sudo apt install software-properties-common -y
-            sudo add-apt-repository --yes --update ppa:ansible/ansible
-            sudo apt install ansible -y
-      - run:
-          name: Install Kubectl
-          command: |
-            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+            curl -k -LO "https://dl.k8s.io/release/v1.24.7/bin/linux/amd64/kubectl"
+            curl -k -LO "https://dl.k8s.io/v1.24.7/bin/linux/amd64/kubectl.sha256"
+            echo "$(cat kubectl.sha256)  kubectl" | sha256sum --check
             sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-            kubectl version --client
-            export PATH=$PATH:/usr/local/bin/kubectl
-      - add_ssh_keys:
-          fingerprints: [dc:31:72:ac:30:aa:d2:cb:d3:27:1f:a1:f2:1d:4d:54]
-      - attach_workspace:
-          at: ~/
+#            chmod +x /usr/local/bin/kubectl
       - run:
-          name: Configure server
+          name: Configure AWS CLI
           command: |
-            echo [management] > ~/project/ansible/inventory.txt
-            aws ec2 describe-instances \
-              --region us-east-1 \
-              --query 'Reservations[*].Instances[*].PublicIpAddress' \
-              --filters "Name=tag:Name,Values=capstone-management*" \
-              --output text >> ~/project/ansible/inventory.txt
-            cat ~/project/ansible/inventory.txt
-            ansible-playbook -i ~/project/ansible/inventory.txt ~/project/ansible/configure-server.yml
-      # - run:
-      #     name: Destroy environments
-      #     when: on_fail
-      #     command: |
-      #         python3 ~/project/clean-stacks.py
-
-  configure-cluster:
-    docker:
-      - image: cimg/base:stable
-    steps:
-      - checkout
+            aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+            aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+            aws configure set default.region us-east-1 
+            aws eks update-kubeconfig --name capstone-cluster
+            kubectl cluster-info
+            kubectl get all -n kube-system
       - run:
-          name: Install AWS CLI v2
+          name: Deployment configmap to eks 
           command: |
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip awscliv2.zip
-            sudo ./aws/install
+            pwd
+            ls -a
+            cd kubernetes
+            pwd
+            ls -a
+            kubectl apply -f aws-auth.yaml
       - run:
-          name: Install Ansible
+          name: Deploytment app to eks 
           command: |
-            sudo apt update
-            sudo apt install software-properties-common -y
-            sudo add-apt-repository --yes --update ppa:ansible/ansible
-            sudo apt install ansible -y
+            cd kubernetes
+            kubectl apply -f deployment.yaml
       - run:
-          name: Install Kubectl
+          name: Run test SVC
           command: |
-            curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-            sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-            kubectl version --client
-            export PATH=$PATH:/usr/local/bin/kubectl
-      - add_ssh_keys:
-          fingerprints: [dc:31:72:ac:30:aa:d2:cb:d3:27:1f:a1:f2:1d:4d:54]
-      - attach_workspace:
-          at: ~/
-      - run:
-          name: Configure server
-          command: |
-            cat ~/project/ansible/inventory.txt
-            cd ansible
-            ansible-playbook -i ~/project/ansible/inventory.txt ~/project/ansible/configure-cluster.yml
-      - run:
-          name: Wait for LoadBalancer's domain to become reachable
-          command: |
-            cat ~/project/ansible/inventory.txt
-            echo "Wait 60 seconds..."
-            sleep 60
-      - run:
-          name: Display the LoadBalancer's DNS name
-          command: |
-            cat ~/project/ansible/inventory.txt
-            cd ansible
-            ansible-playbook -i ~/project/ansible/inventory.txt ~/project/ansible/save-elb-dns.yml
-            cat ~/project/ansible/elb_dns.txt
-      - persist_to_workspace:
-          root: ~/
-          paths:
-            - project/ansible/elb_dns.txt
-      # - run:
-      #     name: Destroy environments
-      #     when: on_fail
-      #     command: |
-      #         python3 ~/project/clean-stacks.py
-
-  deploy-docker:
-    docker:
-      - image: cimg/base:stable
-    steps:
-      - checkout
-      - run:
-          name: Install AWS CLI v2
-          command: |
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip awscliv2.zip
-            sudo ./aws/install
-      - run:
-          name: Install Ansible
-          command: |
-            sudo apt update
-            sudo apt install software-properties-common -y
-            sudo add-apt-repository --yes --update ppa:ansible/ansible
-            sudo apt install ansible -y
-      - add_ssh_keys:
-          fingerprints: [dc:31:72:ac:30:aa:d2:cb:d3:27:1f:a1:f2:1d:4d:54]
-      - attach_workspace:
-          at: ~/
-      - run:
-          name: Deploy newest Docker Image
-          command: |
-            cat ~/project/ansible/inventory.txt
-            cd ansible
-            ansible-playbook -i ~/project/ansible/inventory.txt ~/project/ansible/deploy-app.yml
-          no_output_timeout: 2m
+            sleep 360
+            kubectl get all
 workflows:
   version: 2
   default:
@@ -316,25 +132,15 @@ workflows:
             branches:
               only: 
                 - main
-      - upload-docker:
+      - build:
           requires: [lint]
           filters:
             branches:
               only: 
                 - main
-      - deploy-infras:
-          requires: [upload-docker]
+      - deploy:
+          requires: [build]
           filters:
             branches:
               only:
                 - main
-      - configure-infras:
-          requires:
-            - deploy-infras
-      - configure-cluster:
-          requires:
-            - configure-infras
-            - upload-docker
-      - deploy-docker:
-          requires:
-            - configure-cluster

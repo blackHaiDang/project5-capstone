@@ -7,3 +7,6 @@ data:
   mapRoles: |
     - rolearn: arn:aws:iam::478687380031:user/capstone-user
       username: capstone-user
+      groups:
+        - system:bootstrappers
+        - system:nodess

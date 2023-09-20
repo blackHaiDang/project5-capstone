@@ -3,17 +3,17 @@ kind: Deployment
 metadata:
   name: capstone-app
   labels:
-    app: app
+    app: capstone-app
   namespace: default
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: app
+      app: capstone-app
   template:
     metadata:
       labels:
-        app: app
+        app: capstone-app
     spec:
       containers:
         - image: theblackdang/capstone:latest

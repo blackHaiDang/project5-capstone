@@ -18,7 +18,7 @@ spec:
       containers:
         - image: theblackdang/capstone:latest
           imagePullPolicy: Always
-          name: capstone-project
+          name: capstone-app
           ports:
             - containerPort: 80
           resources:

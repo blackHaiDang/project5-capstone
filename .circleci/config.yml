@@ -158,11 +158,8 @@ workflows:
           requires:
             - "lint"
       - deploy:
-          cluster-name: CapstoneEKS-rUxu8XMd7aJG
-          aws-region: $AWS_DEFAULT_REGION
+          requires: [build]
           filters:
             branches:
               only:
                 - main
-          requires:
-            - "build"

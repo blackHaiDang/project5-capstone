@@ -101,23 +101,17 @@ jobs:
             aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
             aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
             aws configure set default.region us-east-1 
-            aws eks update-kubeconfig --name capstone-project
+            aws eks update-kubeconfig --name capstone-project-cluster
             kubectl cluster-info
             kubectl get all -n kube-system
       - run:
           name: Deployment configmap to eks 
           command: |
-            pwd
-            ls -a
-            cd kubernetes
-            pwd
-            ls -a
-            kubectl apply -f aws-auth.yaml
+            kubectl apply -f ./kubernetes/aws-auth-cfm.yaml
       - run:
           name: Deploytment app to eks 
           command: |
-            cd kubernetes
-            kubectl apply -f deployment.yaml
+            kubectl apply -f ./kubernetes/deployment.yaml
       - run:
           name: Run test SVC
           command: |

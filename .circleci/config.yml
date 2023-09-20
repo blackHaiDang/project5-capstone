@@ -120,12 +120,12 @@ jobs:
           aws-region: << parameters.aws-region >>
           install-kubectl: true
       - kubernetes/create-or-update-resource:
-          resource-file-path: /kubernetes/deployment.yaml
+          resource-file-path: ./kubernetes/deployment.yaml
           resource-name: deployment/capstone
           get-rollout-status: true
           show-kubectl-command: true
       - kubernetes/create-or-update-resource:
-          resource-file-path: /kubernetes/aws-authen-cfm.yaml
+          resource-file-path: ./kubernetes/aws-authen-cfm.yaml
           resource-name: configmap/aws-auth
       - run:
           name: Test cluster
